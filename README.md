@@ -29,10 +29,10 @@ This Helm chart deploys a complete application stack including:
    - Configure Loki logging settings
    - Set OpenAI API key
 
-3. Create required storage classes and PVCs (different if you are using other cloud providers):
+3. Create all required storage classes and PVCs in helm folder (different if you are using other cloud providers):
    ```bash
    # Create gp2 storage class if not exists
-   kubectl apply -f storage-class.yaml
+   kubectl apply -f postgres-pv.yaml
    
    # Create PostgreSQL PVC
    kubectl apply -f postgresql-pvc.yaml
