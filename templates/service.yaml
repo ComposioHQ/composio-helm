@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes
+spec:
+  type: {{ .Values.services.hermes.type }}
+  ports:
+    - port: {{ .Values.services.hermes.port }}
+      targetPort: 9900
+  selector:
+    app: hermes
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mercury
+spec:
+  type: {{ .Values.services.mercury.type }}
+  ports:
+    - port: {{ .Values.services.mercury.port }}
+      targetPort: 8000
+  selector:
+    app: hermes
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mercury-openapi
+spec:
+  type: {{ .Values.services.mercuryOpenapi.type }}
+  ports:
+    - port: {{ .Values.services.mercuryOpenapi.port }}
+      targetPort: 8100
+  selector:
+    app: hermes
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: {{ .Values.services.frontend.type }}
+  ports:
+    - port: {{ .Values.services.frontend.port }}
+      targetPort: 3000
+  selector:
+    app: hermes

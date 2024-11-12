@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  labels:
+    app: db-migration
+spec:
+  template:
+    spec:
+      containers:
+        - name: migration
+          image: "{{ .Values.image.migration.repository }}:{{ .Values.image.migration.tag }}"
+          command: ["sh", "-c", "until pg_isready -h {{ .Values.postgresql.host }} -p {{ .Values.postgresql.port }} -U \"{{ .Values.postgresql.username }}\"; do echo \"Waiting for PostgreSQL... (DATABASE_URL: $DATABASE_URL)\"; sleep 2; done && ./migrate.sh"]
+          env:
+            - name: DATABASE_URL
+              value: {{ include "composio.postgresql.url" . }}
+            - name: REDIS_URL
+              value: {{ include "composio.redis.url" . }}
+      restartPolicy: OnFailure

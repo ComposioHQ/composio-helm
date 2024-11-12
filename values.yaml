@@ -1,0 +1,245 @@
+image:
+  hermes:
+    repository: 008971668139.dkr.ecr.ap-south-1.amazonaws.com/composio/hermes
+    tag: latest
+  frontend:
+    repository: 008971668139.dkr.ecr.ap-south-1.amazonaws.com/composio/frontend
+    tag: latest
+  redis:
+    repository: redis
+    tag: latest
+  postgres:
+    repository: postgres
+    tag: latest
+  mercury:
+    repository: 008971668139.dkr.ecr.ap-south-1.amazonaws.com/composio/mercury
+    tag: latest
+  mercuryOpenapi:
+    repository: 008971668139.dkr.ecr.ap-south-1.amazonaws.com/composio/mercury_openapi
+    tag: latest
+  migration:
+    repository: 008971668139.dkr.ecr.ap-south-1.amazonaws.com/composio/migration
+    tag: latest
+
+services:
+  frontend:
+    type: LoadBalancer
+    port: 3000
+  hermes:
+    type: LoadBalancer
+    port: 9900
+  mercury:
+    type: LoadBalancer
+    port: 8000
+  mercuryOpenapi:
+    type: ClusterIP
+    port: 8000
+
+serviceAccount:
+  create: true
+  name: composio
+
+openai:
+  apiKey: <your_openai_api_key>
+
+redis:
+  port: 6379
+
+postgresql:
+  # -- Whether to deploy a PostgreSQL server to satisfy the applications requirements. To use an external PostgreSQL instance set this to `false` and configure the `externalPostgresql` parameters.
+  enabled: true
+  # -- Name override for PostgreSQL app.
+  nameOverride: composio-postgresql
+  # -- PostgreSQL database name.
+  # -- PostgreSQL database password.
+  
+  auth:
+    username: postgres
+    password: postgres
+    database: composio
+
+  primary:
+    initdb:
+      scripts:
+        create-database.sh: |
+          #!/bin/bash
+          set -e
+          for i in {1..30}; do
+            if PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -h localhost -d postgres -c '\l' >/dev/null 2>&1; then
+              PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -h localhost -d postgres -c "CREATE DATABASE $POSTGRESQL_DATABASE WITH OWNER $POSTGRESQL_USERNAME;" || true
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL to be ready... attempt $i"
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready in time"
+          exit 1
+
+    persistence:
+      # -- Enable persistence using PVC.
+      enabled: true
+      # -- PVC Storage Request for PostgreSQL volume.
+      size: 10Gi
+      existingClaim: "postgresql-pv-claim"
+      storageClass: gp2
+  volumePermissions:
+    enabled: true
+
+externalPostgresql:
+  # -- External PostgreSQL service host.
+  postgresqlHost:
+  # -- External PostgreSQL service port.
+  postgresqlPort: 5432
+  # -- External PostgreSQL service database name.
+  postgresqlDatabase:
+  # -- External PostgreSQL service user.
+  postgresqlUsername:
+  # -- External PostgreSQL service password. Either this or `externalPostgresql.existingSecret` must be set.
+  postgresqlPassword:
+  # -- Name of an existing Kubernetes secret object containing the PostgreSQL password
+  existingSecret:
+  # -- Name of the key pointing to the password in your Kubernetes secret
+  existingSecretPasswordKey: postgresql-password
+
+
+postgres:
+  port: 5432
+  username: postgres
+  password: mysecretpassword
+  database: mydatabase 
+
+redis:
+  # -- Whether to deploy a Redis server to satisfy the applications requirements. To use an external redis instance set this to `false` and configure the `externalRedis` parameters.
+  enabled: true
+
+  nameOverride: "composio-redis"
+
+  fullnameOverride: ""
+
+  architecture: standalone
+
+  auth:
+    # -- Enable Redis password authentication.
+    enabled: false
+
+    # -- Redis password.
+    #    Defaults to a random 10-character alphanumeric string if not set.
+    #    NOTE: ignored unless `redis.auth.enabled` is `true` or if `redis.auth.existingSecret` is set.
+    #
+    password: ""
+
+    # -- The name of an existing secret containing the Redis credential to use.
+    #    NOTE: ignored unless `redis.auth.enabled` is `true`.
+    #          When it is set, the previous `redis.auth.password` parameter is ignored.
+    #
+    existingSecret: ""
+
+    # -- Password key to be retrieved from existing secret.
+    #    NOTE: ignored unless `redis.auth.existingSecret` parameter is set.
+    #
+    existingSecretPasswordKey: ""
+
+  master:
+    persistence:
+      # -- Enable data persistence using PVC.
+      enabled: true
+
+      # -- Persistent Volume size.
+      size: 5Gi
+    # -- Array with additional command line flags for Redis master.
+    extraFlags:
+      ## The maxmemory configuration directive is used in order to configure Redis to use a specified
+      ## amount of memory for the data set. Setting maxmemory to zero results into no memory limits
+      ## see https://redis.io/topics/lru-cache for more details
+      - "--maxmemory 400mb"
+      ## The exact behavior Redis follows when the maxmemory limit is reached is configured using the
+      ## maxmemory-policy configuration directive
+      ## allkeys-lru: evict keys by trying to remove the less recently used (LRU) keys first, in order
+      ## to make space for the new data added
+      - "--maxmemory-policy noeviction"
+
+externalRedis:
+  # -- External Redis host to use.
+  host: ""
+  # -- External Redis port to use.
+  port: 6379
+  # -- Password for the external Redis. Ignored if `externalRedis.existingSecret` is set.
+  password: ""
+  # -- Name of an existing Kubernetes secret object containing the Redis password.
+  existingSecret: ""
+  # -- Name of the key pointing to the password in your Kubernetes secret.
+  existingSecretPasswordKey: ""
+
+frontend:
+  port: 3000
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 10
+
+loki:
+  enabled: true
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+    filesystem:
+      chunks_directory: /data/loki/chunks
+      rules_directory: /data/loki/rules
+  storage_config:
+    boltdb_shipper:
+      active_index_directory: /data/loki/index
+      cache_location: /data/loki/cache
+      shared_store: filesystem
+  structuredConfig:
+    ingester:
+      lifecycler:
+        ring:
+          kvstore:
+            store: inmemory
+      chunk_idle_period: 1h
+      chunk_block_size: 262144
+      chunk_retain_period: 1m
+      max_transfer_retries: 0
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      max_global_streams_per_user: 5000
+      ingestion_rate_mb: 4
+      ingestion_burst_size_mb: 6
+    schema_config:
+      configs:
+        - from: 2020-05-15
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+    
+  # Configure promtail through the Loki chart
+  promtail:
+    enabled: true
+    config:
+      snippets:
+        extraScrapeConfigs: |
+          - job_name: kubernetes-pods
+            kubernetes_sd_configs:
+            - role: pod
+            relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_label_app]
+              target_label: app
+            - source_labels: [__meta_kubernetes_namespace]
+              target_label: namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              target_label: pod
+
+ingress:
+  enabled: true
+  host: "example.com"  # Replace with your actual domain
+  className: nginx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
